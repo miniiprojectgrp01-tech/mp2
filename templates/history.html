@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Scan History — VulnScanner{% endblock %}
+{% block content %}
+<div class="page-wrapper">
+    <div class="page-header">
+        <div class="page-title-block">
+            <h1 class="page-title">🕐 Scan History</h1>
+            <p class="page-subtitle">All your previous security assessments</p>
+        </div>
+    </div>
+
+    {% if scans %}
+    <div class="scan-list">
+        {% for scan in scans %}
+        <div class="scan-item-wrapper">
+            <a href="/results/{{ scan['id'] }}" class="scan-item">
+                <div class="scan-item-left">
+                    <div class="scan-url">{{ scan['url'] }}</div>
+                    <div class="scan-meta">
+                        {{ scan['created_at'] }}
+                        {% if scan['status'] == 'completed' %}
+                        &nbsp;·&nbsp; {{ scan['total_vulns'] }} vulnerabilities &nbsp;·&nbsp; {{ scan['scan_duration'] }}s
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="scan-item-right">
+                    {% if scan['status'] == 'completed' %}
+                        <span class="badge badge-{{ scan['risk_level'] or 'low' }}">{{ (scan['risk_level'] or 'N/A') | upper }}</span>
+                        <span class="scan-score">{{ scan['risk_score'] | int }}/100</span>
+                    {% elif scan['status'] == 'scanning' %}
+                        <span class="badge badge-info">SCANNING…</span>
+                    {% else %}
+                        <span class="badge badge-failed">FAILED</span>
+                    {% endif %}
+                    <span class="scan-arrow">→</span>
+                </div>
+            </a>
+            <button class="delete-btn" onclick="deleteScan({{ scan['id'] }}, this)" title="Delete">🗑</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">🛡️</div>
+        <p class="empty-text">No scans yet. <a href="/" class="link">Start your first scan →</a></p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function deleteScan(id, btn) {
+    if (!confirm('Delete this scan?')) return;
+    const res = await fetch('/delete/' + id, { method: 'POST' });
+    if (res.ok) btn.closest('.scan-item-wrapper').remove();
+}
+</script>
+{% endblock %}

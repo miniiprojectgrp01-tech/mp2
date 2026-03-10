@@ -1,0 +1,768 @@
+{% extends "base.html" %}
+{% block title %}Scan Results — {{ scan.url }}{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+
+    <!-- Header -->
+    <div class="page-header">
+        <a href="/" class="btn-back">← Back</a>
+        <div class="page-title-block">
+            <h1 class="page-title">Scan Report</h1>
+            <div class="scan-target">
+                <span>🌐</span>
+                <span class="target-url">{{ scan.url }}</span>
+                <span class="scan-date">{{ scan.created_at }}</span>
+            </div>
+        </div>
+        <button id="exportPdfBtn" class="btn btn-export-pdf" onclick="exportToPDF()">
+            <span class="pdf-icon">⬇</span> Export PDF
+        </button>
+    </div>
+
+    <!-- Summary + Gauge -->
+    <div class="summary-grid">
+        <div class="card summary-card">
+            <h3 class="card-label">Executive Summary</h3>
+            <p class="summary-text">{{ scan.summary }}</p>
+            <div class="counts-row">
+                <div class="count-item cyan">
+                    <span class="count-num">{{ scan.total_vulns }}</span>
+                    <span class="count-label">Total</span>
+                </div>
+                <div class="count-item red">
+                    <span class="count-num">{{ scan.critical_count }}</span>
+                    <span class="count-label">Critical</span>
+                </div>
+                <div class="count-item orange">
+                    <span class="count-num">{{ scan.high_count }}</span>
+                    <span class="count-label">High</span>
+                </div>
+                <div class="count-item yellow">
+                    <span class="count-num">{{ scan.medium_count }}</span>
+                    <span class="count-label">Medium</span>
+                </div>
+                <div class="count-item green">
+                    <span class="count-num">{{ scan.low_count }}</span>
+                    <span class="count-label">Low</span>
+                </div>
+                <div class="count-item indigo">
+                    <span class="count-num">{{ scan.info_count }}</span>
+                    <span class="count-label">Info</span>
+                </div>
+            </div>
+            {% if scan.scan_duration %}
+            <div class="scan-duration">⏱️ Scan completed in {{ scan.scan_duration }}s</div>
+            {% endif %}
+        </div>
+
+        <div class="card gauge-card">
+            <h3 class="card-label">Risk Score</h3>
+            <div class="gauge-wrapper">
+                <svg viewBox="0 0 200 115" class="gauge-svg">
+                    <path d="M 20 100 A 80 80 0 0 1 180 100"
+                          fill="none" stroke="#1e293b" stroke-width="20" stroke-linecap="round"/>
+                    <path d="M 20 100 A 80 80 0 0 1 180 100"
+                          fill="none"
+                          stroke="{% if scan.risk_level == 'critical' %}#ef4444{% elif scan.risk_level == 'high' %}#f97316{% elif scan.risk_level == 'medium' %}#eab308{% else %}#22c55e{% endif %}"
+                          stroke-width="20" stroke-linecap="round"
+                          stroke-dasharray="251" stroke-dashoffset="251"
+                          id="gaugeArc"/>
+                </svg>
+                <div class="gauge-center">
+                    <span class="gauge-score" id="gaugeScore">0</span>
+                    <span class="gauge-max">/100</span>
+                </div>
+                <span class="gauge-label badge-{{ scan.risk_level }}">{{ (scan.risk_level or 'N/A') | upper }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-wrapper">
+        <div class="tabs-nav">
+            <button class="tab-btn active" onclick="showTab('vulnerabilities', this)">⚠️ Vulnerabilities ({{ scan.total_vulns }})</button>
+            <button class="tab-btn"        onclick="showTab('headers', this)">🔒 HTTP Headers</button>
+            <button class="tab-btn"        onclick="showTab('owasp', this)">📋 OWASP Top 10</button>
+            <button class="tab-btn"        onclick="showTab('chart', this)">📊 Chart</button>
+        </div>
+
+        <!-- Tab 1: Vulnerabilities -->
+        <div id="tab-vulnerabilities" class="tab-content active">
+            <div class="filter-row">
+                {% for val, label in [('all','All'), ('critical','Critical'), ('high','High'), ('medium','Medium'), ('low','Low'), ('info','Info')] %}
+                {% if val == 'all' %}{% set cnt = scan.vulnerabilities | length %}
+                {% else %}{% set cnt = scan.vulnerabilities | selectattr('severity', 'equalto', val) | list | length %}{% endif %}
+                <button class="filter-btn {% if val == 'all' %}active{% endif %} filter-{{ val }}"
+                        onclick="filterVulns('{{ val }}', this)">
+                    {{ label }} ({{ cnt }})
+                </button>
+                {% endfor %}
+            </div>
+
+            <div id="vulnList" class="vuln-list">
+                {% for vuln in scan.vulnerabilities %}
+                <div class="vuln-card sev-{{ vuln.severity | lower }}" data-severity="{{ vuln.severity | lower }}">
+                    <div class="vuln-header" onclick="toggleVuln(this)">
+                        <div class="vuln-header-left">
+                            <span class="sev-dot sev-dot-{{ vuln.severity | lower }}"></span>
+                            <span class="vuln-name">{{ vuln.name }}</span>
+                            <span class="vuln-category">{{ vuln.category }}</span>
+                        </div>
+                        <div class="vuln-header-right">
+                            <span class="badge badge-{{ vuln.severity | lower }}">{{ (vuln.severity or '') | upper }}</span>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                    </div>
+                    <div class="vuln-body hidden">
+                        <div class="vuln-section">
+                            <span class="vuln-section-label">📝 Description</span>
+                            <p>{{ vuln.description }}</p>
+                        </div>
+                        {% if vuln.evidence %}
+                        <div class="vuln-section">
+                            <span class="vuln-section-label">🔍 Evidence</span>
+                            <code class="evidence-code">{{ vuln.evidence }}</code>
+                        </div>
+                        {% endif %}
+                        <div class="vuln-section">
+                            <span class="vuln-section-label">✅ Recommendation</span>
+                            <p class="recommendation">{{ vuln.recommendation }}</p>
+                        </div>
+                        <div class="vuln-section">
+                            <span class="vuln-section-label">🗂️ OWASP Category</span>
+                            <span class="owasp-tag">{{ vuln.owasp_category }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">✅</div>
+                    <p class="empty-text">No vulnerabilities detected.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Tab 2: HTTP Headers -->
+        <div id="tab-headers" class="tab-content hidden">
+            <div class="card">
+                <h3 class="card-label">Security Headers Analysis</h3>
+                <div class="headers-table-wrapper">
+                    <table class="headers-table">
+                        <thead>
+                            <tr><th>Header</th><th>Status</th><th>Value</th><th>Issues</th></tr>
+                        </thead>
+                        <tbody>
+                        {% set header_map = {
+                            'content_security_policy':           'Content-Security-Policy',
+                            'strict_transport_security':         'Strict-Transport-Security',
+                            'x_frame_options':                   'X-Frame-Options',
+                            'x_content_type_options':            'X-Content-Type-Options',
+                            'x_xss_protection':                  'X-XSS-Protection',
+                            'referrer_policy':                   'Referrer-Policy',
+                            'permissions_policy':                'Permissions-Policy',
+                            'x_permitted_cross_domain_policies': 'X-Permitted-Cross-Domain-Policies'
+                        } %}
+                        {% for key, label in header_map.items() %}
+                        {% set h = scan.headers_analysis.get(key, {}) %}
+                        <tr>
+                            <td class="header-name mono">{{ label }}</td>
+                            <td>
+                                {% if h.get('present') %}
+                                <span class="status-badge present">✓ Present</span>
+                                {% else %}
+                                <span class="status-badge missing">✗ Missing</span>
+                                {% endif %}
+                            </td>
+                            <td class="mono small">{{ h.get('value') or '—' }}</td>
+                            <td class="issues-text">{{ h.get('issues') or '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: OWASP Top 10 -->
+        <div id="tab-owasp" class="tab-content hidden">
+            <div class="card">
+                <h3 class="card-label">OWASP Top 10 (2021) Mapping</h3>
+                <div class="owasp-grid">
+                    {% for item in scan.owasp_mapping %}
+                    <div class="owasp-item {% if item.hit %}owasp-hit{% endif %}">
+                        <div class="owasp-code">{{ item.code }}</div>
+                        <div class="owasp-name">{{ item.name }}</div>
+                        {% if item.hit %}
+                        <div class="owasp-count">{{ item.count }} finding{% if item.count != 1 %}s{% endif %}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 4: Chart -->
+        <div id="tab-chart" class="tab-content hidden">
+            <div class="card">
+                <h3 class="card-label">Severity Distribution</h3>
+                <div class="chart-wrapper">
+                    <canvas id="severityChart" width="560" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const SCORE = {{ scan.risk_score | int }};
+
+// Animate gauge on load
+window.addEventListener('load', () => {
+    let n = 0;
+    const el  = document.getElementById('gaugeScore');
+    const arc = document.getElementById('gaugeArc');
+    const t = setInterval(() => {
+        n = Math.min(n + 2, SCORE);
+        el.textContent = n;
+        if (n >= SCORE) clearInterval(t);
+    }, 18);
+    setTimeout(() => {
+        arc.style.transition = 'stroke-dashoffset 1.4s ease';
+        arc.style.strokeDashoffset = 251 - (SCORE / 100) * 251;
+    }, 100);
+});
+
+// Tab switching
+function showTab(name, btn) {
+    document.querySelectorAll('.tab-content').forEach(t => {
+        t.classList.add('hidden'); t.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.remove('hidden');
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+    if (name === 'chart') drawChart();
+}
+
+// Expand/collapse vuln card
+function toggleVuln(header) {
+    const body = header.nextElementSibling;
+    const icon = header.querySelector('.expand-icon');
+    body.classList.toggle('hidden');
+    icon.textContent = body.classList.contains('hidden') ? '▼' : '▲';
+}
+
+// Severity filter
+function filterVulns(severity, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.vuln-card').forEach(card => {
+        card.style.display = (severity === 'all' || card.dataset.severity === severity) ? '' : 'none';
+    });
+}
+
+// Bar chart — no external library needed
+function drawChart() {
+    const canvas = document.getElementById('severityChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const data = [
+        { label: 'Critical', value: {{ scan.critical_count }}, color: '#ef4444' },
+        { label: 'High',     value: {{ scan.high_count }},     color: '#f97316' },
+        { label: 'Medium',   value: {{ scan.medium_count }},   color: '#eab308' },
+        { label: 'Low',      value: {{ scan.low_count }},      color: '#22c55e' },
+        { label: 'Info',     value: {{ scan.info_count }},     color: '#818cf8' },
+    ];
+    const W = canvas.width, H = canvas.height;
+    const pad = { top: 30, right: 30, bottom: 50, left: 40 };
+    const maxVal = Math.max(...data.map(d => d.value), 1);
+    const chartH = H - pad.top - pad.bottom;
+    const barW   = (W - pad.left - pad.right) / data.length - 24;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Grid lines
+    for (let i = 0; i <= 4; i++) {
+        const y = pad.top + (chartH / 4) * i;
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+        ctx.fillStyle = '#475569'; ctx.font = '11px Inter'; ctx.textAlign = 'right';
+        ctx.fillText(Math.round(maxVal - (maxVal / 4) * i), pad.left - 6, y + 4);
+    }
+
+    // Bars
+    data.forEach((d, i) => {
+        const x    = pad.left + i * ((W - pad.left - pad.right) / data.length) + 12;
+        const barH = (d.value / maxVal) * chartH;
+        const y    = pad.top + chartH - barH;
+
+        ctx.fillStyle = d.color + '25';
+        ctx.fillRect(x, y, barW, barH);
+        ctx.fillStyle = d.color;
+        ctx.fillRect(x, y, barW, 5);
+
+        if (d.value > 0) {
+            ctx.fillStyle = '#f1f5f9'; ctx.font = 'bold 15px Inter'; ctx.textAlign = 'center';
+            ctx.fillText(d.value, x + barW / 2, y - 8);
+        }
+        ctx.fillStyle = '#64748b'; ctx.font = '12px Inter'; ctx.textAlign = 'center';
+        ctx.fillText(d.label, x + barW / 2, H - 12);
+    });
+}
+
+// ── PDF Export ────────────────────────────────────────────────
+function exportToPDF() {
+    const btn = document.getElementById('exportPdfBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="pdf-spinner"></span> Generating...';
+
+    setTimeout(() => {
+        try {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+            const PW   = 210;  // page width mm
+            const PH   = 297;  // page height mm
+            const ML   = 14;   // margin left
+            const MR   = 14;   // margin right
+            const CW   = PW - ML - MR;  // content width
+            const BOTTOM_MARGIN = 20;
+
+            // Severity colour map  [r,g,b]
+            const SEV_COLORS = {
+                critical: [239, 68,  68 ],
+                high:     [249, 115, 22 ],
+                medium:   [234, 179, 8  ],
+                low:      [34,  197, 94 ],
+                info:     [129, 140, 248],
+            };
+
+            let y = 0;
+
+            // ── helper: check / add page ─────────────────────
+            function checkPage(needed) {
+                if (y + needed > PH - BOTTOM_MARGIN) {
+                    doc.addPage();
+                    y = 16;
+                    drawPageFooter();
+                }
+            }
+
+            function drawPageFooter() {
+                const pg = doc.internal.getNumberOfPages();
+                doc.setFontSize(7.5);
+                doc.setTextColor(120, 130, 150);
+                doc.text(`VulnScanner Security Report  •  Page ${pg}`, PW / 2, PH - 8, { align: 'center' });
+            }
+
+            // ── helper: wrapped text block ────────────────────
+            function wrappedText(text, x, maxW, lineH) {
+                const lines = doc.splitTextToSize(String(text || ''), maxW);
+                lines.forEach(line => {
+                    checkPage(lineH + 2);
+                    doc.text(line, x, y);
+                    y += lineH;
+                });
+                return lines.length;
+            }
+
+            // ── helper: section heading ───────────────────────
+            function sectionHeading(title, iconChar) {
+                checkPage(18);
+                y += 4;
+                // Teal accent bar
+                doc.setFillColor(6, 182, 212);   // cyan
+                doc.roundedRect(ML, y - 5, 3, 8, 1, 1, 'F');
+                doc.setFontSize(10.5);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(30, 41, 59);
+                doc.text((iconChar ? iconChar + '  ' : '') + title, ML + 6, y);
+                y += 5;
+                // divider line
+                doc.setDrawColor(200, 210, 225);
+                doc.setLineWidth(0.3);
+                doc.line(ML, y, PW - MR, y);
+                y += 5;
+            }
+
+            // ═══════════════════════════════════════════════════
+            // PAGE 1 — COVER / HEADER
+            // ═══════════════════════════════════════════════════
+
+            // Dark header banner
+            doc.setFillColor(15, 23, 42);  // --bg
+            doc.rect(0, 0, PW, 52, 'F');
+
+            // Cyan gradient bar (simulated with a thin rect)
+            doc.setFillColor(6, 182, 212);
+            doc.rect(0, 50, PW, 2, 'F');
+
+            // Brand
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(241, 245, 249);
+            doc.text('VulnScanner', ML, 18);
+
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 116, 139);
+            doc.text('Web Application Security Report', ML, 25);
+
+            // Risk badge on the right
+            const RISK = '{{ (scan.risk_level or "N/A") | upper }}';
+            const RISK_LVL = '{{ scan.risk_level or "low" }}';
+            const RISK_SCORE = {{ scan.risk_score | int }};
+            const rCol = SEV_COLORS[RISK_LVL] || [34,197,94];
+            doc.setFontSize(24);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...rCol);
+            doc.text(String(RISK_SCORE), PW - MR - 20, 22, { align: 'right' });
+            doc.setFontSize(8);
+            doc.setTextColor(100, 116, 139);
+            doc.text('/100', PW - MR, 22, { align: 'right' });
+            doc.setFontSize(8.5);
+            doc.setTextColor(...rCol);
+            doc.text(RISK + ' RISK', PW - MR, 30, { align: 'right' });
+
+            y = 60;
+
+            // Meta info block
+            doc.setFillColor(241, 245, 249);
+            doc.roundedRect(ML, y, CW, 30, 3, 3, 'F');
+            doc.setDrawColor(200, 210, 225);
+            doc.setLineWidth(0.4);
+            doc.roundedRect(ML, y, CW, 30, 3, 3, 'S');
+
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(71, 85, 105);
+            doc.text('TARGET', ML + 6, y + 8);
+            doc.text('DATE', ML + 6, y + 17);
+            doc.text('DURATION', ML + 6, y + 26);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(15, 23, 42);
+            const targetUrl = '{{ scan.url }}';
+            const scanDate  = '{{ scan.created_at }}';
+            const scanDur   = {{ scan.scan_duration or 0 }};
+            doc.text(doc.splitTextToSize(targetUrl, CW - 50)[0], ML + 35, y + 8);
+            doc.text(scanDate, ML + 35, y + 17);
+            doc.text(scanDur > 0 ? scanDur + 's' : 'N/A', ML + 35, y + 26);
+            y += 36;
+
+            // Count pills row
+            const counts = [
+                { label: 'Total',    val: {{ scan.total_vulns }},    col: [34,211,238] },
+                { label: 'Critical', val: {{ scan.critical_count }}, col: [239,68,68]  },
+                { label: 'High',     val: {{ scan.high_count }},     col: [249,115,22] },
+                { label: 'Medium',   val: {{ scan.medium_count }},   col: [234,179,8]  },
+                { label: 'Low',      val: {{ scan.low_count }},      col: [34,197,94]  },
+                { label: 'Info',     val: {{ scan.info_count }},     col: [129,140,248]},
+            ];
+            const pillW = CW / counts.length;
+            counts.forEach((c, i) => {
+                const px = ML + i * pillW;
+                // alpha=0.12 blended on white (248,250,252)
+                doc.setFillColor(
+                    Math.round(c.col[0]*0.12 + 248*0.88),
+                    Math.round(c.col[1]*0.12 + 250*0.88),
+                    Math.round(c.col[2]*0.12 + 252*0.88)
+                );
+                doc.roundedRect(px, y, pillW - 2, 16, 2, 2, 'F');
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(...c.col);
+                doc.text(String(c.val), px + (pillW - 2) / 2, y + 8, { align: 'center' });
+                doc.setFontSize(6.5);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(100, 116, 139);
+                doc.text(c.label.toUpperCase(), px + (pillW - 2) / 2, y + 13.5, { align: 'center' });
+            });
+            y += 22;
+
+            // ── Executive Summary ─────────────────────────────
+            sectionHeading('Executive Summary');
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(60, 75, 95);
+            const summaryText = '{{ scan.summary | replace("'", "\\'") | replace('"', '\\"') | replace('\n', ' ') }}';
+            wrappedText(summaryText, ML, CW, 5.2);
+
+            // ═══════════════════════════════════════════════════
+            // SECTION — VULNERABILITIES
+            // ═══════════════════════════════════════════════════
+            sectionHeading('Vulnerabilities', '');
+
+            const vulns = {{ scan.vulnerabilities | tojson }};
+            if (vulns.length === 0) {
+                checkPage(12);
+                doc.setFontSize(9);
+                doc.setTextColor(100, 116, 139);
+                doc.text('No vulnerabilities detected.', ML, y);
+                y += 10;
+            } else {
+                vulns.forEach((v, idx) => {
+                    checkPage(30);
+                    const sev    = (v.severity || 'info').toLowerCase();
+                    const sColor = SEV_COLORS[sev] || [129,140,248];
+
+                    // Card background
+                    doc.setFillColor(248, 250, 252);
+                    doc.setDrawColor(...sColor);
+                    doc.setLineWidth(0.5);
+                    const cardStartY = y;
+
+                    // Severity strip on left
+                    doc.setFillColor(...sColor);
+                    doc.roundedRect(ML, y, 2.5, 8, 0.5, 0.5, 'F');
+
+                    // Vuln name
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(15, 23, 42);
+                    const nameLines = doc.splitTextToSize((idx + 1) + '. ' + (v.name || ''), CW - 50);
+                    doc.text(nameLines[0], ML + 6, y + 5.5);
+
+                    // Severity badge — alpha=0.15 on white
+                    const badgeX = PW - MR - 22;
+                    doc.setFillColor(
+                        Math.round(sColor[0]*0.15 + 248*0.85),
+                        Math.round(sColor[1]*0.15 + 250*0.85),
+                        Math.round(sColor[2]*0.15 + 252*0.85)
+                    );
+                    doc.roundedRect(badgeX, y + 1, 22, 7, 2, 2, 'F');
+                    doc.setFontSize(6.5);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(...sColor);
+                    doc.text(sev.toUpperCase(), badgeX + 11, y + 6, { align: 'center' });
+
+                    // Category pill
+                    doc.setFontSize(6.5);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(100, 116, 139);
+                    const catW = doc.getTextWidth((v.category || '') + '  ');
+                    doc.setFillColor(226, 232, 240);
+                    doc.roundedRect(badgeX - catW - 4, y + 1.5, catW + 4, 6, 1.5, 1.5, 'F');
+                    doc.text(v.category || '', badgeX - catW / 2 - 2, y + 5.8, { align: 'center' });
+
+                    y += 11;
+
+                    // Description
+                    if (v.description) {
+                        checkPage(12);
+                        doc.setFontSize(7.5);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(71, 85, 105);
+                        doc.text('Description', ML + 6, y);
+                        y += 4;
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(60, 75, 95);
+                        wrappedText(v.description, ML + 6, CW - 8, 4.5);
+                    }
+
+                    // Evidence
+                    if (v.evidence) {
+                        checkPage(14);
+                        doc.setFontSize(7.5);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(71, 85, 105);
+                        doc.text('Evidence', ML + 6, y);
+                        y += 4;
+                        doc.setFillColor(15, 23, 42);
+                        const evLines = doc.splitTextToSize(v.evidence, CW - 14);
+                        const evH = evLines.length * 4.2 + 5;
+                        checkPage(evH);
+                        doc.roundedRect(ML + 4, y - 2, CW - 6, evH, 2, 2, 'F');
+                        doc.setFont('Courier', 'normal');
+                        doc.setFontSize(6.8);
+                        doc.setTextColor(165, 243, 252);
+                        evLines.forEach(line => {
+                            doc.text(line, ML + 7, y + 2.2);
+                            y += 4.2;
+                        });
+                        y += 3;
+                    }
+
+                    // Recommendation
+                    if (v.recommendation) {
+                        checkPage(12);
+                        doc.setFontSize(7.5);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(71, 85, 105);
+                        doc.text('Recommendation', ML + 6, y);
+                        y += 4;
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(22, 163, 74);
+                        wrappedText(v.recommendation, ML + 6, CW - 8, 4.5);
+                    }
+
+                    // OWASP tag
+                    if (v.owasp_category) {
+                        checkPage(10);
+                        doc.setFontSize(7);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(129, 140, 248);
+                        doc.text('OWASP: ' + v.owasp_category, ML + 6, y);
+                        y += 4;
+                    }
+
+                    y += 5; // card gap
+                });
+            }
+
+            // ═══════════════════════════════════════════════════
+            // SECTION — HTTP HEADERS
+            // ═══════════════════════════════════════════════════
+            sectionHeading('HTTP Security Headers', '');
+
+            const headerMap = {
+                content_security_policy:           'Content-Security-Policy',
+                strict_transport_security:         'Strict-Transport-Security',
+                x_frame_options:                   'X-Frame-Options',
+                x_content_type_options:            'X-Content-Type-Options',
+                x_xss_protection:                  'X-XSS-Protection',
+                referrer_policy:                   'Referrer-Policy',
+                permissions_policy:                'Permissions-Policy',
+                x_permitted_cross_domain_policies: 'X-Permitted-Cross-Domain-Policies',
+            };
+            const headersData = {{ scan.headers_analysis | tojson }};
+
+            // Table header row
+            const COL = [ML, ML + 60, ML + 88, ML + 116];
+            checkPage(10);
+            // alpha=0.07 cyan on white
+            doc.setFillColor(
+                Math.round(6*0.07   + 248*0.93),
+                Math.round(182*0.07 + 250*0.93),
+                Math.round(212*0.07 + 252*0.93)
+            );
+            doc.rect(ML, y - 3, CW, 8, 'F');
+            doc.setFontSize(7.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(6, 182, 212);
+            ['Header', 'Status', 'Value', 'Issues'].forEach((h, i) => doc.text(h, COL[i], y + 2));
+            y += 7;
+            doc.setDrawColor(200, 210, 225);
+            doc.setLineWidth(0.3);
+            doc.line(ML, y, PW - MR, y);
+            y += 3;
+
+            Object.entries(headerMap).forEach(([key, label], rowIdx) => {
+                const h = headersData[key] || {};
+                checkPage(10);
+                if (rowIdx % 2 === 0) {
+                    doc.setFillColor(248, 250, 252);
+                    doc.rect(ML, y - 2, CW, 8, 'F');
+                }
+                doc.setFontSize(7);
+                doc.setFont('Courier', 'normal');
+                doc.setTextColor(30, 41, 59);
+                doc.text(label, COL[0], y + 3, { maxWidth: 58 });
+
+                // Status
+                const present = h.present === true;
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(present ? 22 : 239, present ? 163 : 68, present ? 74 : 68);
+                doc.text(present ? 'Present' : 'Missing', COL[1], y + 3);
+
+                // Value
+                doc.setFont('Courier', 'normal');
+                doc.setFontSize(6.2);
+                doc.setTextColor(71, 85, 105);
+                const val = h.value ? String(h.value).substring(0, 35) : '—';
+                doc.text(val, COL[2], y + 3);
+
+                // Issues
+                doc.setFontSize(6.5);
+                doc.setTextColor(h.issues ? 239 : 100, h.issues ? 68 : 116, h.issues ? 68 : 139);
+                doc.text(h.issues ? String(h.issues).substring(0, 38) : '—', COL[3], y + 3);
+
+                y += 8;
+            });
+
+            // ═══════════════════════════════════════════════════
+            // SECTION — OWASP TOP 10
+            // ═══════════════════════════════════════════════════
+            sectionHeading('OWASP Top 10 (2021) Mapping', '');
+
+            const owaspMapping = {{ scan.owasp_mapping | tojson }};
+            const OCOLS = 2;
+            const OITEM_W = CW / OCOLS - 3;
+
+            for (let i = 0; i < owaspMapping.length; i += OCOLS) {
+                const rowItems = owaspMapping.slice(i, i + OCOLS);
+                const rowH = 18;
+                checkPage(rowH + 4);
+
+                rowItems.forEach((item, ci) => {
+                    const ox = ML + ci * (OITEM_W + 3);
+                    const hit = item.hit;
+                    if (hit) {
+                        // alpha=0.08 cyan on white
+                        doc.setFillColor(
+                            Math.round(6*0.08   + 248*0.92),
+                            Math.round(182*0.08 + 250*0.92),
+                            Math.round(212*0.08 + 252*0.92)
+                        );
+                        doc.roundedRect(ox, y, OITEM_W, rowH, 2, 2, 'F');
+                        doc.setDrawColor(6, 182, 212);
+                        doc.setLineWidth(0.5);
+                        doc.roundedRect(ox, y, OITEM_W, rowH, 2, 2, 'S');
+                    } else {
+                        doc.setFillColor(248, 250, 252);
+                        doc.roundedRect(ox, y, OITEM_W, rowH, 2, 2, 'F');
+                        doc.setDrawColor(200, 210, 225);
+                        doc.setLineWidth(0.3);
+                        doc.roundedRect(ox, y, OITEM_W, rowH, 2, 2, 'S');
+                    }
+
+                    doc.setFontSize(7.5);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(hit ? 6 : 71, hit ? 182 : 85, hit ? 212 : 105);
+                    doc.text(item.code, ox + 4, y + 6.5);
+
+                    doc.setFontSize(7);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(30, 41, 59);
+                    const nameLines = doc.splitTextToSize(item.name, OITEM_W - 8);
+                    doc.text(nameLines[0], ox + 4, y + 11.5);
+
+                    if (hit && item.count > 0) {
+                        doc.setFontSize(6.5);
+                        doc.setTextColor(249, 115, 22);
+                        doc.text(item.count + ' finding' + (item.count > 1 ? 's' : ''), ox + 4, y + 16.5);
+                    }
+                });
+                y += rowH + 3;
+            }
+
+            // Footer on every page
+            const total = doc.internal.getNumberOfPages();
+            for (let p = 1; p <= total; p++) {
+                doc.setPage(p);
+                doc.setFontSize(7.5);
+                doc.setTextColor(120, 130, 150);
+                doc.text(`VulnScanner Security Report  •  Page ${p} of ${total}`, PW / 2, PH - 8, { align: 'center' });
+            }
+
+            // Save
+            const safeName = '{{ scan.url }}'.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').slice(0, 40);
+            doc.save(`vuln_report_${safeName}_${Date.now()}.pdf`);
+
+        } catch(err) {
+            console.error('PDF generation error', err);
+            alert('PDF generation failed: ' + err.message);
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<span class="pdf-icon">⬇</span> Export PDF';
+    }, 50);
+}
+</script>
+{% endblock %}

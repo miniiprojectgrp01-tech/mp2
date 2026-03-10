@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}VulnScanner — Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+
+    <!-- Hero -->
+    <div class="hero">
+        <div class="hero-badge"><span class="pulse-dot"></span> Vulnerability Detection Tool</div>
+        <h1 class="hero-title">Web Security <span class="gradient-text">Scanner</span></h1>
+        <p class="hero-subtitle">
+            Passive security analysis — detects vulnerabilities, maps to OWASP Top 10,
+            and generates actionable reports using real HTTP header data.
+        </p>
+    </div>
+
+    <!-- Scan Form -->
+    <div class="card scan-card">
+        <div class="scan-form-inner">
+            <div class="input-group">
+                <span class="input-prefix">🔍</span>
+                <input type="text" id="urlInput" class="url-input"
+                       placeholder="Enter URL to scan — e.g. https://example.com"
+                       autocomplete="off"/>
+            </div>
+            <button id="scanBtn" class="btn btn-primary" onclick="startScan()">
+                <span id="btnText">Start Scan</span>
+                <span id="btnSpinner" class="spinner hidden"></span>
+            </button>
+        </div>
+        <div id="progressArea" class="progress-area hidden">
+            <div class="progress-bar-track"><div id="progressBar" class="progress-bar"></div></div>
+            <p id="progressText" class="progress-text">Initializing...</p>
+        </div>
+        <div id="errorArea" class="error-area hidden">
+            <span>⚠️</span><span id="errorText"></span>
+        </div>
+    </div>
+
+    <!-- Stats (only if completed scans exist) -->
+    {% set completed = scans | selectattr('status', 'equalto', 'completed') | list %}
+    {% if completed %}
+    <div class="stats-grid">
+        <div class="stat-card cyan">
+            <div class="stat-icon">📡</div>
+            <div class="stat-value">{{ completed | length }}</div>
+            <div class="stat-label">Total Scans</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-value">{{ completed | sum(attribute='total_vulns') }}</div>
+            <div class="stat-label">Vulnerabilities Found</div>
+        </div>
+        <div class="stat-card red">
+            <div class="stat-icon">🚨</div>
+            <div class="stat-value">{{ completed | sum(attribute='critical_count') }}</div>
+            <div class="stat-label">Critical Issues</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-icon">📊</div>
+            <div class="stat-value">{{ (completed | sum(attribute='risk_score') / completed | length) | round | int }}</div>
+            <div class="stat-label">Avg Risk Score</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Scans -->
+    {% if scans %}
+    <div class="section">
+        <div class="section-header"><span>🕐</span><h2 class="section-title">Recent Scans</h2></div>
+        <div class="scan-list">
+            {% for scan in scans %}
+            <a href="/results/{{ scan['id'] }}" class="scan-item">
+                <div class="scan-item-left">
+                    <div class="scan-url">{{ scan['url'] }}</div>
+                    <div class="scan-meta">{{ scan['created_at'] }}</div>
+                </div>
+                <div class="scan-item-right">
+                    {% if scan['status'] == 'completed' %}
+                        <span class="badge badge-{{ scan['risk_level'] or 'low' }}">{{ (scan['risk_level'] or 'N/A') | upper }}</span>
+                        <span class="scan-score">{{ scan['risk_score'] | int }}/100</span>
+                    {% elif scan['status'] == 'scanning' %}
+                        <span class="badge badge-info">SCANNING…</span>
+                    {% else %}
+                        <span class="badge badge-failed">FAILED</span>
+                    {% endif %}
+                    <span class="scan-arrow">→</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">🛡️</div>
+        <p class="empty-text">No scans yet. Enter a URL above to get started.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const steps = [
+    'Connecting to target website...',
+    'Fetching real HTTP headers...',
+    'Analyzing security headers...',
+    'Checking OWASP Top 10 categories...',
+    'Calculating risk score...',
+    'Generating recommendations...',
+    'Finalizing report...'
+];
+
+async function startScan() {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) { showError('Please enter a URL to scan.'); return; }
+
+    setScanning(true);
+    hideError();
+
+    let stepIndex = 0, progress = 0;
+    const interval = setInterval(() => {
+        progress = Math.min(progress + Math.random() * 10, 88);
+        document.getElementById('progressBar').style.width = progress + '%';
+        if (stepIndex < steps.length)
+            document.getElementById('progressText').textContent = steps[stepIndex++];
+    }, 900);
+
+    try {
+        const res  = await fetch('/scan', {
+            method:  'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:    JSON.stringify({ url })
+        });
+        clearInterval(interval);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Scan failed.');
+
+        document.getElementById('progressBar').style.width = '100%';
+        document.getElementById('progressText').textContent = '✅ Scan complete! Loading results...';
+        setTimeout(() => { window.location.href = '/results/' + data.scan_id; }, 500);
+
+    } catch (err) {
+        clearInterval(interval);
+        setScanning(false);
+        showError(err.message);
+    }
+}
+
+document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startScan();
+});
+
+function setScanning(on) {
+    document.getElementById('btnText').textContent = on ? 'Scanning...' : 'Start Scan';
+    document.getElementById('btnSpinner').classList.toggle('hidden', !on);
+    document.getElementById('progressArea').classList.toggle('hidden', !on);
+    document.getElementById('scanBtn').disabled = on;
+}
+function showError(msg) {
+    document.getElementById('errorText').textContent = msg;
+    document.getElementById('errorArea').classList.remove('hidden');
+}
+function hideError() {
+    document.getElementById('errorArea').classList.add('hidden');
+}
+</script>
+{% endblock %}
