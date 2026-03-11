@@ -1,5 +1,5 @@
 # ============================================================
-#  app.py — Web Application Vulnerability Scanner
+#  app.py  Web Application Vulnerability Scanner
 #  Backend: Python + Flask
 #  Database: SQLite (built into Python, no setup needed)
 #
@@ -160,9 +160,9 @@ def delete_scan(scan_id):
     return jsonify({'success': True})
 
 
-# ══════════════════════════════════════════════════════════════
-#  SCANNING ENGINE — 9 checks, all passive, all accurate
-# ══════════════════════════════════════════════════════════════
+# 
+#  SCANNING ENGINE  9 checks, all passive, all accurate
+# 
 
 SECURITY_HEADERS = {
     'content-security-policy':           'Content-Security-Policy (CSP)',
@@ -193,7 +193,7 @@ def fetch_real_headers(url):
         return {}, None
 
 
-# ── Check 1: Security Headers ─────────────────────────────────
+#  Check 1: Security Headers 
 def check_security_headers(real_headers):
     vulns = []
     CHECKS = [
@@ -209,7 +209,7 @@ def check_security_headers(real_headers):
         if not real_headers.get(hkey):
             vulns.append({'name': name, 'category': 'Headers', 'severity': sev,
                           'description': desc, 'recommendation': rec,
-                          'owasp_category': owasp, 'evidence': 'MISSING — header not present in HTTP response'})
+                          'owasp_category': owasp, 'evidence': 'MISSING  header not present in HTTP response'})
     xxss = real_headers.get('x-xss-protection', '')
     if xxss and xxss.strip() == '1':
         vulns.append({'name': 'X-XSS-Protection Misconfiguration', 'category': 'Headers', 'severity': 'low',
@@ -219,7 +219,7 @@ def check_security_headers(real_headers):
     return vulns
 
 
-# ── Check 2: Information Leakage ──────────────────────────────
+#  Check 2: Information Leakage 
 def check_information_leakage(real_headers):
     vulns = []
     for h in ['server', 'x-powered-by', 'x-aspnet-version', 'x-generator']:
@@ -233,17 +233,17 @@ def check_information_leakage(real_headers):
     return vulns
 
 
-# ── Check 3: HTTPS ────────────────────────────────────────────
+#  Check 3: HTTPS 
 def check_https(url):
     if url.startswith('http://'):
         return [{'name': 'Site Not Using HTTPS', 'category': 'TLS/SSL', 'severity': 'critical',
                  'description': 'The site is served over HTTP. All data is transmitted in plaintext.',
                  'recommendation': 'Enable HTTPS with a valid TLS certificate.',
-                 'owasp_category': 'A02: Cryptographic Failures', 'evidence': 'URL uses http:// — no encryption'}]
+                 'owasp_category': 'A02: Cryptographic Failures', 'evidence': 'URL uses http://  no encryption'}]
     return []
 
 
-# ── Check 4: Cookie Security ──────────────────────────────────
+#  Check 4: Cookie Security 
 def check_cookie_security(real_headers):
     vulns = []
     raw = real_headers.get('set-cookie', '')
@@ -258,7 +258,7 @@ def check_cookie_security(real_headers):
                       'owasp_category': 'A07: Authentication Failures', 'evidence': f'Set-Cookie: {raw[:120]}'})
     if 'secure' not in low:
         vulns.append({'name': 'Cookie Missing Secure Flag', 'category': 'Cookies', 'severity': 'medium',
-                      'description': 'Cookies missing Secure flag — can be sent over plain HTTP, exposing tokens to sniffing.',
+                      'description': 'Cookies missing Secure flag  can be sent over plain HTTP, exposing tokens to sniffing.',
                       'recommendation': 'Add Secure flag: Set-Cookie: session=abc; Secure; HttpOnly',
                       'owasp_category': 'A02: Cryptographic Failures', 'evidence': f'Set-Cookie: {raw[:120]}'})
     if 'samesite' not in low:
@@ -268,16 +268,16 @@ def check_cookie_security(real_headers):
                       'owasp_category': 'A01: Broken Access Control', 'evidence': f'Set-Cookie: {raw[:120]}'})
     matches = re.findall(r'domain=(\.[a-z0-9.-]+)', low)
     if matches:
-        vulns.append({'name': 'Insecure Cookie Setting — Domain Too Loose', 'category': 'Cookies', 'severity': 'medium',
-                      'description': f'Cookie domain "{matches[0]}" starts with a dot — sent to ALL subdomains including untrusted ones.',
+        vulns.append({'name': 'Insecure Cookie Setting  Domain Too Loose', 'category': 'Cookies', 'severity': 'medium',
+                      'description': f'Cookie domain "{matches[0]}" starts with a dot  sent to ALL subdomains including untrusted ones.',
                       'recommendation': 'Set Domain to exact host: Domain=www.example.com not Domain=.example.com',
                       'owasp_category': 'A05: Security Misconfiguration', 'evidence': f'Cookie domain: {matches[0]}'})
     return vulns
 
 
-# ── Check 5: XSS Reflection ───────────────────────────────────
+#  Check 5: XSS Reflection 
 def check_xss_reflection(url):
-    """Send harmless probe — if reflected unescaped in HTML body → XSS risk."""
+    """Send harmless probe  if reflected unescaped in HTML body  XSS risk."""
     vulns = []
     probe = 'xsstest99887'
     try:
@@ -289,7 +289,7 @@ def check_xss_reflection(url):
             idx     = body.find(probe)
             context = body[max(0, idx-80):idx+80]
             if not context.strip().startswith('<!--'):
-                vulns.append({'name': 'Reflected XSS — User Input Reflected in Response',
+                vulns.append({'name': 'Reflected XSS  User Input Reflected in Response',
                               'category': 'XSS', 'severity': 'high',
                               'description': 'Website reflects user input directly in HTML without sanitization. Attackers can inject scripts that execute in victim browsers.',
                               'recommendation': '1. Sanitize all inputs server-side.\n2. Use output encoding.\n3. Implement a strong Content-Security-Policy.',
@@ -300,9 +300,9 @@ def check_xss_reflection(url):
     return vulns
 
 
-# ── Check 6: SQL Injection Errors ─────────────────────────────
+#  Check 6: SQL Injection Errors 
 def check_sqli_errors(url):
-    """Send single quote probe — if SQL error appears in response → SQLi risk."""
+    """Send single quote probe  if SQL error appears in response  SQLi risk."""
     vulns = []
     SQL_ERRORS = [
         "you have an error in your sql syntax", "warning: mysql", "mysql_fetch",
@@ -322,7 +322,7 @@ def check_sqli_errors(url):
         body    = resp.text.lower()
         matched = [e for e in SQL_ERRORS if e in body]
         if matched:
-            vulns.append({'name': 'SQL Injection Indicator — Database Error Exposed',
+            vulns.append({'name': 'SQL Injection Indicator  Database Error Exposed',
                           'category': 'Injection', 'severity': 'critical',
                           'description': 'Website returned a raw SQL error in response to a probe. User input reaches SQL queries without sanitization.',
                           'recommendation': '1. Use parameterized queries.\n2. Never expose raw DB errors.\n3. Show generic error messages.',
@@ -333,7 +333,7 @@ def check_sqli_errors(url):
     return vulns
 
 
-# ── Check 7: robots.txt ───────────────────────────────────────
+#  Check 7: robots.txt 
 def check_robots_txt(url):
     vulns = []
     try:
@@ -343,7 +343,7 @@ def check_robots_txt(url):
             vulns.append({'name': 'robots.txt File Publicly Accessible',
                           'category': 'Information Leakage', 'severity': 'info',
                           'description': 'robots.txt is public and contains Disallow entries. Attackers use this to discover hidden paths and admin panels.',
-                          'recommendation': 'Review robots.txt — never rely on it for security. Remove sensitive path references.',
+                          'recommendation': 'Review robots.txt  never rely on it for security. Remove sensitive path references.',
                           'owasp_category': 'A05: Security Misconfiguration',
                           'evidence': f'robots.txt found at {base}/robots.txt with Disallow entries'})
     except Exception:
@@ -351,7 +351,7 @@ def check_robots_txt(url):
     return vulns
 
 
-# ── Check 8: security.txt ─────────────────────────────────────
+#  Check 8: security.txt 
 def check_security_txt(url):
     vulns = []
     try:
@@ -361,7 +361,7 @@ def check_security_txt(url):
             vulns.append({'name': 'Missing security.txt File',
                           'category': 'Configuration', 'severity': 'info',
                           'description': 'No security.txt found. Researchers have no clear channel to report vulnerabilities responsibly.',
-                          'recommendation': 'Create /.well-known/security.txt — see https://securitytxt.org',
+                          'recommendation': 'Create /.well-known/security.txt  see https://securitytxt.org',
                           'owasp_category': 'A05: Security Misconfiguration',
                           'evidence': f'GET {base}/.well-known/security.txt returned HTTP {resp.status_code}'})
     except Exception:
@@ -369,7 +369,7 @@ def check_security_txt(url):
     return vulns
 
 
-# ── Check 9: Rate Limit Headers ───────────────────────────────
+#  Check 9: Rate Limit Headers 
 def check_rate_limit_header(real_headers):
     has = any('ratelimit' in k or 'rate-limit' in k or 'x-ratelimit' in k for k in real_headers)
     if not has:
@@ -381,7 +381,7 @@ def check_rate_limit_header(real_headers):
     return []
 
 
-# ── Main scan orchestrator ────────────────────────────────────
+#  Main scan orchestrator 
 def run_ai_scan(url):
     api_key = os.environ.get('GROQ_API_KEY', '')
 
@@ -454,13 +454,13 @@ def generate_summary(url, vulnerabilities, score, risk_level, api_key):
                 f"{score}/100 ({risk_level} risk). Review the findings below.")
 
 
-# ── Start ─────────────────────────────────────────────────────
+#  Start 
 if __name__ == '__main__':
     with app.app_context():
         init_db()
-        print("✅ Database ready")
+        print(" Database ready")
     key = os.environ.get('GROQ_API_KEY', '')
-    print("✅ Groq API key found" if key else "ℹ️  No API key — running without AI summary (results still accurate)")
-    print("🚀 Starting VulnScanner...")
-    print("📡 Open browser → http://127.0.0.1:5000")
+    print(" Groq API key found" if key else "  No API key  running without AI summary (results still accurate)")
+    print(" Starting VulnScanner...")
+    print(" Open browser  http://127.0.0.1:5000")
     app.run(debug=True, host='127.0.0.1', port=5000)
