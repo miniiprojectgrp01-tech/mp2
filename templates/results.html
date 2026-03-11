@@ -101,46 +101,54 @@
             </div>
 
             <div id="vulnList" class="vuln-list">
-                {% for vuln in scan.vulnerabilities %}
-                <div class="vuln-card sev-{{ vuln.severity | lower }}" data-severity="{{ vuln.severity | lower }}">
-                    <div class="vuln-header" onclick="toggleVuln(this)">
-                        <div class="vuln-header-left">
-                            <span class="sev-dot sev-dot-{{ vuln.severity | lower }}"></span>
-                            <span class="vuln-name">{{ vuln.name }}</span>
-                            <span class="vuln-category">{{ vuln.category }}</span>
-                        </div>
-                        <div class="vuln-header-right">
-                            <span class="badge badge-{{ vuln.severity | lower }}">{{ (vuln.severity or '') | upper }}</span>
-                            <span class="expand-icon">▼</span>
+                {% if scan.vulnerabilities %}
+                    {% for category in scan.vuln_categories %}
+                    <div class="category-block" data-category="{{ category }}">
+                        <h3 class="category-title">{{ category }}</h3>
+                        <div class="category-vulns">
+                            {% for vuln in scan.vulnerabilities if vuln.category == category %}
+                            <div class="vuln-card sev-{{ vuln.severity | lower }}" data-severity="{{ vuln.severity | lower }}">
+                                <div class="vuln-header" onclick="toggleVuln(this)">
+                                    <div class="vuln-header-left">
+                                        <span class="sev-dot sev-dot-{{ vuln.severity | lower }}"></span>
+                                        <span class="vuln-name">{{ vuln.name }}</span>
+                                    </div>
+                                    <div class="vuln-header-right">
+                                        <span class="badge badge-{{ vuln.severity | lower }}">{{ (vuln.severity or '') | upper }}</span>
+                                        <span class="expand-icon">▼</span>
+                                    </div>
+                                </div>
+                                <div class="vuln-body hidden">
+                                    <div class="vuln-section">
+                                        <span class="vuln-section-label">📝 Description</span>
+                                        <p>{{ vuln.description }}</p>
+                                    </div>
+                                    {% if vuln.evidence %}
+                                    <div class="vuln-section">
+                                        <span class="vuln-section-label">🔍 Evidence</span>
+                                        <code class="evidence-code">{{ vuln.evidence }}</code>
+                                    </div>
+                                    {% endif %}
+                                    <div class="vuln-section">
+                                        <span class="vuln-section-label">✅ Recommendation</span>
+                                        <p class="recommendation">{{ vuln.recommendation }}</p>
+                                    </div>
+                                    <div class="vuln-section">
+                                        <span class="vuln-section-label">🗂️ OWASP Category</span>
+                                        <span class="owasp-tag">{{ vuln.owasp_category }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
                         </div>
                     </div>
-                    <div class="vuln-body hidden">
-                        <div class="vuln-section">
-                            <span class="vuln-section-label">📝 Description</span>
-                            <p>{{ vuln.description }}</p>
-                        </div>
-                        {% if vuln.evidence %}
-                        <div class="vuln-section">
-                            <span class="vuln-section-label">🔍 Evidence</span>
-                            <code class="evidence-code">{{ vuln.evidence }}</code>
-                        </div>
-                        {% endif %}
-                        <div class="vuln-section">
-                            <span class="vuln-section-label">✅ Recommendation</span>
-                            <p class="recommendation">{{ vuln.recommendation }}</p>
-                        </div>
-                        <div class="vuln-section">
-                            <span class="vuln-section-label">🗂️ OWASP Category</span>
-                            <span class="owasp-tag">{{ vuln.owasp_category }}</span>
-                        </div>
-                    </div>
-                </div>
+                    {% endfor %}
                 {% else %}
                 <div class="empty-state">
                     <div class="empty-icon">✅</div>
                     <p class="empty-text">No vulnerabilities detected.</p>
                 </div>
-                {% endfor %}
+                {% endif %}
             </div>
         </div>
 
@@ -262,8 +270,18 @@ function toggleVuln(header) {
 function filterVulns(severity, btn) {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    document.querySelectorAll('.vuln-card').forEach(card => {
-        card.style.display = (severity === 'all' || card.dataset.severity === severity) ? '' : 'none';
+    
+    document.querySelectorAll('.category-block').forEach(categoryBlock => {
+        let hasVisibleCards = false;
+        
+        categoryBlock.querySelectorAll('.vuln-card').forEach(card => {
+            const isMatch = (severity === 'all' || card.dataset.severity === severity);
+            card.style.display = isMatch ? '' : 'none';
+            if (isMatch) hasVisibleCards = true;
+        });
+        
+        // Hide the entire category block if no cards inside it are visible
+        categoryBlock.style.display = hasVisibleCards ? '' : 'none';
     });
 }
 

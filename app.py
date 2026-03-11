@@ -145,6 +145,12 @@ def results(scan_id):
         }
         for code, name in owasp_cats
     ]
+
+    # Extract unique categories for grouped display
+    categories = list(set(v.get('category', 'Other') for v in scan_dict['vulnerabilities']))
+    categories.sort()
+    scan_dict['vuln_categories'] = categories
+    
     return render_template('results.html', scan=scan_dict)
 
 
