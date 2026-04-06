@@ -1,169 +1,481 @@
 {% extends "base.html" %}
-{% block title %}VulnScanner — Dashboard{% endblock %}
 
-{% block content %}
-<div class="page-wrapper">
+{% block title %}Web Application Vulnerability Scanner{% endblock %}
 
-    <!-- Hero -->
-    <div class="hero">
-        <div class="hero-badge"><span class="pulse-dot"></span> Vulnerability Detection Tool</div>
-        <h1 class="hero-title">Web Security <span class="gradient-text">Scanner</span></h1>
-        <p class="hero-subtitle">
-            Passive security analysis — detects vulnerabilities, maps to OWASP Top 10,
-            and generates actionable reports using real HTTP header data.
-        </p>
-    </div>
+{% block extra_head %}
+<style>
+    /* ── Hero ── */
+    .hero-section {
+        background: linear-gradient(135deg, #0d1117 0%, #1a1a2e 50%, #0f3460 100%);
+        padding: 5rem 0 4rem;
+        position: relative;
+        overflow: hidden;
+    }
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(ellipse at center, rgba(233,69,96,0.07) 0%, transparent 60%);
+        pointer-events: none;
+    }
+    .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(233,69,96,0.15);
+        border: 1px solid rgba(233,69,96,0.3);
+        color: #e94560;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 5px 14px;
+        border-radius: 20px;
+        margin-bottom: 1.5rem;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    .hero-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        font-weight: 700;
+        line-height: 1.15;
+        color: #fff;
+        margin-bottom: 1rem;
+    }
+    .hero-title .highlight { color: #e94560; }
+    .hero-subtitle {
+        font-size: 1.05rem;
+        color: #8892b0;
+        max-width: 560px;
+        line-height: 1.7;
+        margin-bottom: 2rem;
+    }
 
-    <!-- Scan Form -->
-    <div class="card scan-card">
-        <div class="scan-form-inner">
-            <div class="input-group">
-                <span class="input-prefix">🔍</span>
-                <input type="text" id="urlInput" class="url-input"
-                       placeholder="Enter URL to scan — e.g. https://example.com"
-                       autocomplete="off"/>
-            </div>
-            <button id="scanBtn" class="btn btn-primary" onclick="startScan()">
-                <span id="btnText">Start Scan</span>
-                <span id="btnSpinner" class="spinner hidden"></span>
-            </button>
-        </div>
-        <div id="progressArea" class="progress-area hidden">
-            <div class="progress-bar-track"><div id="progressBar" class="progress-bar"></div></div>
-            <p id="progressText" class="progress-text">Initializing...</p>
-        </div>
-        <div id="errorArea" class="error-area hidden">
-            <span>⚠️</span><span id="errorText"></span>
-        </div>
-    </div>
+    /* ── Scan Card ── */
+    .scan-card {
+        background: #1e2a45;
+        border: 1px solid #2a3a5c;
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .scan-card-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: #fff;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .scan-card-title .dot {
+        width: 8px; height: 8px;
+        background: #e94560;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50%       { opacity: 0.5; transform: scale(1.3); }
+    }
 
-    <!-- Stats (only if completed scans exist) -->
-    {% set completed = scans | selectattr('status', 'equalto', 'completed') | list %}
-    {% if completed %}
-    <div class="stats-grid">
-        <div class="stat-card cyan">
-            <div class="stat-icon">📡</div>
-            <div class="stat-value">{{ completed | length }}</div>
-            <div class="stat-label">Total Scans</div>
-        </div>
-        <div class="stat-card orange">
-            <div class="stat-icon">⚠️</div>
-            <div class="stat-value">{{ completed | sum(attribute='total_vulns') }}</div>
-            <div class="stat-label">Vulnerabilities Found</div>
-        </div>
-        <div class="stat-card red">
-            <div class="stat-icon">🚨</div>
-            <div class="stat-value">{{ completed | sum(attribute='critical_count') }}</div>
-            <div class="stat-label">Critical Issues</div>
-        </div>
-        <div class="stat-card green">
-            <div class="stat-icon">📊</div>
-            <div class="stat-value">{{ (completed | sum(attribute='risk_score') / completed | length) | round | int }}</div>
-            <div class="stat-label">Avg Risk Score</div>
-        </div>
-    </div>
-    {% endif %}
+    .input-group-text {
+        background: #0d1117;
+        border-color: #2a3a5c;
+        color: #8892b0;
+    }
+    .level-select-label {
+        font-size: 0.82rem;
+        color: #8892b0;
+        margin-bottom: 4px;
+        font-weight: 500;
+    }
 
-    <!-- Recent Scans -->
-    {% if scans %}
-    <div class="section">
-        <div class="section-header"><span>🕐</span><h2 class="section-title">Recent Scans</h2></div>
-        <div class="scan-list">
-            {% for scan in scans %}
-            <a href="/results/{{ scan['id'] }}" class="scan-item">
-                <div class="scan-item-left">
-                    <div class="scan-url">{{ scan['url'] }}</div>
-                    <div class="scan-meta">{{ scan['created_at'] }}</div>
-                </div>
-                <div class="scan-item-right">
-                    {% if scan['status'] == 'completed' %}
-                        <span class="badge badge-{{ scan['risk_level'] or 'low' }}">{{ (scan['risk_level'] or 'N/A') | upper }}</span>
-                        <span class="scan-score">{{ scan['risk_score'] | int }}/100</span>
-                    {% elif scan['status'] == 'scanning' %}
-                        <span class="badge badge-info">SCANNING…</span>
-                    {% else %}
-                        <span class="badge badge-failed">FAILED</span>
-                    {% endif %}
-                    <span class="scan-arrow">→</span>
-                </div>
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-    {% else %}
-    <div class="empty-state">
-        <div class="empty-icon">🛡️</div>
-        <p class="empty-text">No scans yet. Enter a URL above to get started.</p>
-    </div>
-    {% endif %}
+    #btn-scan {
+        background: linear-gradient(135deg, #e94560, #c73350);
+        border: none;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        font-size: 1rem;
+        border-radius: 8px;
+        transition: all 0.25s;
+        width: 100%;
+    }
+    #btn-scan:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(233,69,96,0.4);
+    }
+    #btn-scan:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
 
-</div>
+    /* ── Loading overlay ── */
+    #loading {
+        display: none;
+        text-align: center;
+        padding: 2rem 0 0;
+    }
+    .spinner-ring {
+        width: 48px; height: 48px;
+        border: 4px solid rgba(233,69,96,0.2);
+        border-top-color: #e94560;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+        margin: 0 auto 0.75rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { color: #8892b0; font-size: 0.9rem; }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+        display: flex;
+        gap: 2rem;
+        flex-wrap: wrap;
+        margin-top: 2.5rem;
+        padding-top: 2rem;
+        border-top: 1px solid #2a3a5c;
+    }
+    .stat-item { text-align: center; }
+    .stat-num {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #e94560;
+        line-height: 1;
+    }
+    .stat-label { font-size: 0.78rem; color: #8892b0; margin-top: 3px; }
+
+    /* ── Feature Cards ── */
+    .features-section { padding: 4rem 0; background: #0d1117; }
+    .section-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #fff;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+    .section-sub { text-align: center; color: #8892b0; margin-bottom: 2.5rem; font-size: 0.95rem; }
+
+    .feature-card {
+        background: #1e2a45;
+        border: 1px solid #2a3a5c;
+        border-radius: 12px;
+        padding: 1.5rem;
+        height: 100%;
+        transition: all 0.25s;
+        position: relative;
+        overflow: hidden;
+    }
+    .feature-card::after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #e94560, #0f3460);
+        transform: scaleX(0);
+        transition: transform 0.3s;
+    }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: 0 12px 35px rgba(0,0,0,0.4); border-color: #3a4a6c; }
+    .feature-card:hover::after { transform: scaleX(1); }
+
+    .feature-icon {
+        width: 44px; height: 44px;
+        background: rgba(233,69,96,0.12);
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.1rem;
+        color: #e94560;
+        margin-bottom: 1rem;
+    }
+    .feature-title { font-weight: 600; font-size: 0.95rem; color: #fff; margin-bottom: 0.35rem; }
+    .feature-desc { font-size: 0.83rem; color: #8892b0; line-height: 1.55; }
+
+    /* ── OWASP badge ── */
+    .owasp-inline {
+        display: inline-block;
+        background: rgba(15,52,96,0.5);
+        border: 1px solid #2a3a5c;
+        color: #7dd3fc;
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-top: 6px;
+        font-weight: 500;
+    }
+
+    /* ── Error alert ── */
+    #error-alert { display: none; margin-top: 1rem; }
+</style>
 {% endblock %}
 
-{% block extra_js %}
+{% block content %}
+<!-- ══════════ HERO ══════════ -->
+<section class="hero-section">
+    <div class="container">
+        <div class="row align-items-center gy-4">
+
+            <!-- Left: headline + scan form -->
+            <div class="col-lg-6">
+                <div class="hero-badge">
+                    <i class="fas fa-shield-alt"></i> Passive + Active Security Analysis
+                </div>
+                <h1 class="hero-title">
+                    Web Application<br>
+                    <span class="highlight">Vulnerability</span> Scanner
+                </h1>
+                <p class="hero-subtitle">
+                    Perform comprehensive security assessments with 9 passive checks,
+                    4-level SQL injection detection, and OWASP Top 10 mapping — instantly.
+                </p>
+
+                <!-- Stats -->
+                <div class="stats-bar">
+                    <div class="stat-item"><div class="stat-num">9</div><div class="stat-label">Security Checks</div></div>
+                    <div class="stat-item"><div class="stat-num">4</div><div class="stat-label">SQLi Detection Levels</div></div>
+                    <div class="stat-item"><div class="stat-num">10</div><div class="stat-label">OWASP Categories</div></div>
+                    <div class="stat-item"><div class="stat-num">0</div><div class="stat-label">API Key Needed</div></div>
+                </div>
+            </div>
+
+            <!-- Right: Scan form -->
+            <div class="col-lg-5 offset-lg-1">
+                <div class="scan-card">
+                    <div class="scan-card-title">
+                        <span class="dot"></span>
+                        Start a Security Scan
+                    </div>
+
+                    <form id="scanForm" novalidate>
+                        <!-- URL input -->
+                        <div class="mb-3">
+                            <label for="url" class="form-label level-select-label">
+                                <i class="fas fa-globe me-1"></i>Target URL
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-link"></i></span>
+                                <input
+                                    type="url"
+                                    id="url"
+                                    name="url"
+                                    class="form-control"
+                                    placeholder="https://example.com"
+                                    required
+                                    autocomplete="off"
+                                >
+                            </div>
+                        </div>
+
+                        <!-- SQLi toggle -->
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="sqli_enabled" checked>
+                                <label class="form-check-label level-select-label" for="sqli_enabled" style="margin-bottom:0;">
+                                    <i class="fas fa-database me-1"></i>Enable SQL Injection Detection
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- SQLi level (shown only when enabled) -->
+                        <div class="mb-4" id="sqli_level_wrapper">
+                            <label for="sqli_level" class="form-label level-select-label">
+                                Detection Level
+                            </label>
+                            <select id="sqli_level" name="sqli_level" class="form-select">
+                                <option value="1">Level 1 — Error-based Detection (fastest)</option>
+                                <option value="2">Level 2 — Boolean-based Blind Detection</option>
+                                <option value="3">Level 3 — Time-based Blind Detection</option>
+                                <option value="4">Level 4 — All Methods Combined (thorough)</option>
+                            </select>
+                            <div class="mt-1" style="font-size:0.76rem; color:#8892b0;">
+                                Higher levels are more thorough but slower.
+                            </div>
+                        </div>
+
+                        <!-- Submit -->
+                        <button type="submit" id="btn-scan" class="btn btn-danger">
+                            <i class="fas fa-search me-2"></i>Start Scan
+                        </button>
+
+                        <!-- Error alert -->
+                        <div id="error-alert" class="alert alert-danger mt-3 mb-0" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i><span id="error-text"></span>
+                        </div>
+
+                        <!-- Loading -->
+                        <div id="loading">
+                            <div class="spinner-ring"></div>
+                            <p class="loading-text">Scanning target… this may take 15–30 seconds</p>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- ══════════ FEATURES ══════════ -->
+<section class="features-section">
+    <div class="container">
+        <h2 class="section-title">What We Check</h2>
+        <p class="section-sub">9 passive checks + 4-level active SQL injection testing</p>
+
+        <div class="row g-3">
+
+            <!-- 1 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-lock"></i></div>
+                    <div class="feature-title">Security Headers Analysis</div>
+                    <div class="feature-desc">Checks HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and X-XSS-Protection.</div>
+                    <div><span class="owasp-inline">A05:2021</span></div>
+                </div>
+            </div>
+
+            <!-- 2 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-database"></i></div>
+                    <div class="feature-title">SQL Injection Detection</div>
+                    <div class="feature-desc">4-method detection: Error-based, Boolean-based blind, Time-based blind, and combined deep scanning.</div>
+                    <div><span class="owasp-inline">A03:2021</span></div>
+                </div>
+            </div>
+
+            <!-- 3 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-code"></i></div>
+                    <div class="feature-title">XSS Detection</div>
+                    <div class="feature-desc">Probes for reflected cross-site scripting using multiple payloads including script tags and event handlers.</div>
+                    <div><span class="owasp-inline">A03:2021</span></div>
+                </div>
+            </div>
+
+            <!-- 4 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-cookie-bite"></i></div>
+                    <div class="feature-title">Cookie Security</div>
+                    <div class="feature-desc">Verifies HttpOnly, Secure, and SameSite flags on session cookies to prevent theft and CSRF attacks.</div>
+                    <div><span class="owasp-inline">A05:2021</span></div>
+                </div>
+            </div>
+
+            <!-- 5 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-shield-alt"></i></div>
+                    <div class="feature-title">HTTPS Enforcement</div>
+                    <div class="feature-desc">Detects unencrypted HTTP connections that expose user data to interception via man-in-the-middle attacks.</div>
+                    <div><span class="owasp-inline">A02:2021</span></div>
+                </div>
+            </div>
+
+            <!-- 6 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-server"></i></div>
+                    <div class="feature-title">Information Leakage</div>
+                    <div class="feature-desc">Detects server version disclosure via the Server header which can expose software to targeted exploits.</div>
+                    <div><span class="owasp-inline">A05:2021</span></div>
+                </div>
+            </div>
+
+            <!-- 7 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-robot"></i></div>
+                    <div class="feature-title">Robots.txt Exposure</div>
+                    <div class="feature-desc">Checks if robots.txt is publicly accessible and may inadvertently reveal sensitive directories to attackers.</div>
+                    <div><span class="owasp-inline">A05:2021</span></div>
+                </div>
+            </div>
+
+            <!-- 8 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-file-shield"></i></div>
+                    <div class="feature-title">Security.txt Check</div>
+                    <div class="feature-desc">Verifies the presence of a security disclosure policy at /.well-known/security.txt as per RFC 9116.</div>
+                    <div><span class="owasp-inline">A05:2021</span></div>
+                </div>
+            </div>
+
+            <!-- 9 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-tachometer-alt"></i></div>
+                    <div class="feature-title">Rate Limiting Detection</div>
+                    <div class="feature-desc">Checks for RateLimit headers to identify APIs unprotected against brute-force and automated abuse attacks.</div>
+                    <div><span class="owasp-inline">A05:2021</span></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
 <script>
-const steps = [
-    'Connecting to target website...',
-    'Fetching real HTTP headers...',
-    'Analyzing security headers...',
-    'Checking OWASP Top 10 categories...',
-    'Calculating risk score...',
-    'Generating recommendations...',
-    'Finalizing report...'
-];
-
-async function startScan() {
-    const url = document.getElementById('urlInput').value.trim();
-    if (!url) { showError('Please enter a URL to scan.'); return; }
-
-    setScanning(true);
-    hideError();
-
-    let stepIndex = 0, progress = 0;
-    const interval = setInterval(() => {
-        progress = Math.min(progress + Math.random() * 10, 88);
-        document.getElementById('progressBar').style.width = progress + '%';
-        if (stepIndex < steps.length)
-            document.getElementById('progressText').textContent = steps[stepIndex++];
-    }, 900);
-
-    try {
-        const res  = await fetch('/scan', {
-            method:  'POST',
-            headers: {'Content-Type': 'application/json'},
-            body:    JSON.stringify({ url })
-        });
-        clearInterval(interval);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Scan failed.');
-
-        document.getElementById('progressBar').style.width = '100%';
-        document.getElementById('progressText').textContent = '✅ Scan complete! Loading results...';
-        setTimeout(() => { window.location.href = '/results/' + data.scan_id; }, 500);
-
-    } catch (err) {
-        clearInterval(interval);
-        setScanning(false);
-        showError(err.message);
-    }
-}
-
-document.getElementById('urlInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') startScan();
+// Toggle SQLi level dropdown when checkbox changes
+const sqliCheckbox = document.getElementById('sqli_enabled');
+const sqliWrapper  = document.getElementById('sqli_level_wrapper');
+sqliCheckbox.addEventListener('change', () => {
+    sqliWrapper.style.display = sqliCheckbox.checked ? '' : 'none';
 });
 
-function setScanning(on) {
-    document.getElementById('btnText').textContent = on ? 'Scanning...' : 'Start Scan';
-    document.getElementById('btnSpinner').classList.toggle('hidden', !on);
-    document.getElementById('progressArea').classList.toggle('hidden', !on);
-    document.getElementById('scanBtn').disabled = on;
-}
-function showError(msg) {
-    document.getElementById('errorText').textContent = msg;
-    document.getElementById('errorArea').classList.remove('hidden');
-}
-function hideError() {
-    document.getElementById('errorArea').classList.add('hidden');
-}
+document.getElementById('scanForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const url          = document.getElementById('url').value.trim();
+    const sqli_enabled = document.getElementById('sqli_enabled').checked;
+    const sqli_level   = document.getElementById('sqli_level').value;
+    const btnScan      = document.getElementById('btn-scan');
+    const loading      = document.getElementById('loading');
+    const errAlert     = document.getElementById('error-alert');
+    const errText      = document.getElementById('error-text');
+
+    // Hide previous errors
+    errAlert.style.display = 'none';
+
+    if (!url) {
+        errText.textContent = 'Please enter a valid URL.';
+        errAlert.style.display = 'block';
+        return;
+    }
+
+    // Show loading state
+    loading.style.display = 'block';
+    btnScan.disabled = true;
+    btnScan.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Scanning…';
+
+    try {
+        const response = await fetch('/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, sqli_level, sqli_enabled })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            window.location.href = `/scan/${data.scan_id}`;
+        } else {
+            errText.textContent = data.error || 'Unknown error occurred.';
+            errAlert.style.display = 'block';
+        }
+    } catch (error) {
+        errText.textContent = 'Scan failed: ' + error.message;
+        errAlert.style.display = 'block';
+    } finally {
+        loading.style.display = 'none';
+        btnScan.disabled = false;
+        btnScan.innerHTML = '<i class="fas fa-search me-2"></i>Start Scan';
+    }
+});
 </script>
 {% endblock %}

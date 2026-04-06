@@ -1,12 +1,215 @@
 {% extends "base.html" %}
-{% block title %}Not Found{% endblock %}
+
+{% block title %}404 — Page Not Found | Web Application Vulnerability Scanner{% endblock %}
+
+{% block extra_head %}
+<style>
+    .error-page {
+        min-height: calc(100vh - 130px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #0d1117 0%, #1a1a2e 60%, #0d1117 100%);
+        position: relative;
+        overflow: hidden;
+        padding: 3rem 1rem;
+    }
+
+    /* ambient glow */
+    .error-page::before {
+        content: '';
+        position: absolute;
+        top: 20%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 600px;
+        height: 400px;
+        background: radial-gradient(ellipse, rgba(233,69,96,0.08) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    .error-container {
+        text-align: center;
+        position: relative;
+        z-index: 1;
+        max-width: 520px;
+    }
+
+    /* ── 404 number ── */
+    .error-number {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: clamp(7rem, 20vw, 11rem);
+        font-weight: 700;
+        line-height: 1;
+        background: linear-gradient(135deg, #e94560 0%, #0f3460 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        user-select: none;
+        margin-bottom: 0;
+        letter-spacing: -4px;
+        position: relative;
+    }
+    .error-number::after {
+        content: '404';
+        position: absolute;
+        top: 6px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, rgba(233,69,96,0.12), rgba(15,52,96,0.12));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        filter: blur(12px);
+        pointer-events: none;
+    }
+
+    /* ── Icon ── */
+    .error-icon-wrap {
+        width: 72px;
+        height: 72px;
+        background: rgba(233,69,96,0.1);
+        border: 2px solid rgba(233,69,96,0.25);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 1.8rem;
+        color: #e94560;
+        animation: floatIcon 3s ease-in-out infinite;
+    }
+    @keyframes floatIcon {
+        0%, 100% { transform: translateY(0); }
+        50%       { transform: translateY(-8px); }
+    }
+
+    .error-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 0.75rem;
+    }
+    .error-subtitle {
+        color: #8892b0;
+        font-size: 0.95rem;
+        line-height: 1.65;
+        margin-bottom: 2rem;
+        max-width: 380px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* ── Divider line ── */
+    .error-divider {
+        width: 60px;
+        height: 3px;
+        background: linear-gradient(90deg, #e94560, #0f3460);
+        border-radius: 2px;
+        margin: 1.25rem auto;
+    }
+
+    /* ── Buttons ── */
+    .btn-home {
+        background: linear-gradient(135deg, #e94560, #c73350);
+        border: none;
+        color: #fff;
+        font-weight: 600;
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.25s;
+        font-size: 0.95rem;
+    }
+    .btn-home:hover {
+        color: #fff;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(233,69,96,0.4);
+    }
+    .btn-history {
+        background: transparent;
+        border: 1px solid #2a3a5c;
+        color: #cdd6f4;
+        font-weight: 500;
+        padding: 0.75rem 1.75rem;
+        border-radius: 8px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+        font-size: 0.95rem;
+    }
+    .btn-history:hover {
+        border-color: #e94560;
+        color: #e94560;
+        background: rgba(233,69,96,0.06);
+    }
+
+    /* ── Hint chips ── */
+    .hint-row {
+        margin-top: 2rem;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.6rem;
+    }
+    .hint-chip {
+        background: #1e2a45;
+        border: 1px solid #2a3a5c;
+        color: #8892b0;
+        border-radius: 6px;
+        padding: 5px 12px;
+        font-size: 0.78rem;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .hint-chip i { color: #3a4a6c; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-wrapper">
-    <div class="empty-state" style="padding:80px 20px">
-        <div class="empty-icon">🔍</div>
-        <h2 style="color:#f1f5f9;margin-bottom:8px">Page Not Found</h2>
-        <p class="empty-text">That scan doesn't exist.</p>
-        <a href="/" class="btn btn-primary" style="margin-top:24px;display:inline-flex">← Go Home</a>
+<div class="error-page">
+    <div class="error-container">
+
+        <!-- Big 404 -->
+        <div class="error-number">404</div>
+
+        <!-- Floating icon -->
+        <div class="error-icon-wrap">
+            <i class="fas fa-search-minus"></i>
+        </div>
+
+        <div class="error-divider"></div>
+
+        <h1 class="error-title">That scan doesn't exist.</h1>
+        <p class="error-subtitle">
+            It may have been deleted, or the link you followed is incorrect.
+            Double-check the URL or run a fresh scan below.
+        </p>
+
+        <!-- Buttons -->
+        <div class="d-flex justify-content-center gap-3 flex-wrap">
+            <a href="/" class="btn-home">
+                <i class="fas fa-home"></i> Go to Homepage
+            </a>
+            <a href="/history" class="btn-history">
+                <i class="fas fa-history"></i> View History
+            </a>
+        </div>
+
+        <!-- Hint chips -->
+        <div class="hint-row">
+            <div class="hint-chip"><i class="fas fa-info-circle"></i> Check the scan ID in the URL</div>
+            <div class="hint-chip"><i class="fas fa-database"></i> The record may have been removed</div>
+            <div class="hint-chip"><i class="fas fa-redo"></i> Try running a new scan</div>
+        </div>
+
     </div>
 </div>
 {% endblock %}

@@ -1,59 +1,587 @@
 {% extends "base.html" %}
-{% block title %}Scan History — VulnScanner{% endblock %}
+
+{% block title %}Scan History | Web Application Vulnerability Scanner{% endblock %}
+
+{% block extra_head %}
+<style>
+    .history-hero {
+        background: linear-gradient(135deg, #0d1117 0%, #1a1a2e 100%);
+        padding: 2.5rem 0 2rem;
+        border-bottom: 1px solid #2a3a5c;
+    }
+    .page-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.9rem;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 0.3rem;
+    }
+    .page-sub { color: #8892b0; font-size: 0.93rem; }
+
+    /* ── Stats row ── */
+    .stats-row {
+        display: flex;
+        gap: 1.25rem;
+        flex-wrap: wrap;
+        margin-top: 1.5rem;
+    }
+    .stat-chip {
+        background: #1e2a45;
+        border: 1px solid #2a3a5c;
+        border-radius: 8px;
+        padding: 0.6rem 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+    }
+    .stat-chip .num { font-weight: 700; color: #fff; font-size: 1rem; }
+    .stat-chip .lbl { color: #8892b0; }
+
+    /* ── Table card ── */
+    .history-card {
+        background: #1e2a45;
+        border: 1px solid #2a3a5c;
+        border-radius: 14px;
+        overflow: hidden;
+        margin-top: 1.75rem;
+    }
+    .history-card-header {
+        background: #1a1a2e;
+        border-bottom: 1px solid #2a3a5c;
+        padding: 1rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .history-card-title {
+        font-weight: 600;
+        color: #cdd6f4;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* ── Search ── */
+    .search-box {
+        position: relative;
+        max-width: 240px;
+    }
+    .search-box input {
+        background: #0d1117;
+        border: 1px solid #2a3a5c;
+        color: #cdd6f4;
+        border-radius: 8px;
+        padding: 0.4rem 0.75rem 0.4rem 2rem;
+        font-size: 0.85rem;
+        width: 100%;
+    }
+    .search-box input::placeholder { color: #8892b0; }
+    .search-box input:focus {
+        outline: none;
+        border-color: #0f3460;
+        box-shadow: 0 0 0 2px rgba(15,52,96,0.3);
+    }
+    .search-box .search-icon {
+        position: absolute;
+        left: 0.6rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #8892b0;
+        font-size: 0.8rem;
+        pointer-events: none;
+    }
+
+    /* ── Clear all button ── */
+    .btn-clear-all {
+        background: rgba(233,69,96,0.1);
+        border: 1px solid rgba(233,69,96,0.3);
+        color: #fda4af;
+        border-radius: 8px;
+        padding: 0.4rem 1rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+    }
+    .btn-clear-all:hover {
+        background: rgba(233,69,96,0.2);
+        border-color: rgba(233,69,96,0.5);
+        color: #fda4af;
+    }
+
+    /* ── Table ── */
+    .history-table { margin: 0; }
+    .history-table thead th {
+        background: #1a1a2e;
+        color: #8892b0;
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        padding: 0.85rem 1.25rem;
+        border-bottom: 1px solid #2a3a5c;
+        border-top: none;
+        white-space: nowrap;
+    }
+    .history-table tbody td {
+        padding: 0.85rem 1.25rem;
+        vertical-align: middle;
+        border-color: rgba(42,58,92,0.5);
+        font-size: 0.88rem;
+        color: #cdd6f4;
+    }
+    .history-table tbody tr { transition: background 0.15s; }
+    .history-table tbody tr:hover { background: #0f3460; }
+    .history-table tbody tr.row-deleting {
+        opacity: 0.4;
+        pointer-events: none;
+        transition: opacity 0.3s;
+    }
+
+    /* ── ID badge ── */
+    .scan-id-badge {
+        background: rgba(15,52,96,0.5);
+        color: #7dd3fc;
+        border: 1px solid #2a3a5c;
+        padding: 2px 8px;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    /* ── URL cell ── */
+    .url-cell {
+        max-width: 260px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .url-cell a { color: #a8b2d8; text-decoration: none; }
+    .url-cell a:hover { color: #7dd3fc; }
+
+    /* ── Timestamp ── */
+    .timestamp-cell { color: #8892b0; font-size: 0.82rem; white-space: nowrap; }
+
+    /* ── Score ── */
+    .score-cell { font-weight: 700; font-size: 1rem; }
+    .score-LOW    { color: #86efac; }
+    .score-MEDIUM { color: #fcd34d; }
+    .score-HIGH   { color: #fda4af; }
+
+    /* ── Risk pill ── */
+    .risk-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 14px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+    }
+    .risk-LOW    { background: rgba(25,135,84,0.15);  color: #86efac; border: 1px solid rgba(25,135,84,0.3); }
+    .risk-MEDIUM { background: rgba(255,193,7,0.15);  color: #fcd34d; border: 1px solid rgba(255,193,7,0.3); }
+    .risk-HIGH   { background: rgba(233,69,96,0.15);  color: #fda4af; border: 1px solid rgba(233,69,96,0.3); }
+
+    /* ── Action buttons cell ── */
+    .actions-cell { white-space: nowrap; }
+    .btn-view {
+        background: rgba(15,52,96,0.4);
+        border: 1px solid #2a3a5c;
+        color: #a8b2d8;
+        border-radius: 7px;
+        padding: 5px 12px;
+        font-size: 0.80rem;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        transition: all 0.2s;
+    }
+    .btn-view:hover { border-color: #7dd3fc; color: #7dd3fc; background: rgba(13,202,240,0.06); }
+
+    .btn-delete-row {
+        background: rgba(233,69,96,0.08);
+        border: 1px solid rgba(233,69,96,0.2);
+        color: #fda4af;
+        border-radius: 7px;
+        padding: 5px 10px;
+        font-size: 0.80rem;
+        font-weight: 500;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        transition: all 0.2s;
+        margin-left: 5px;
+    }
+    .btn-delete-row:hover {
+        background: rgba(233,69,96,0.2);
+        border-color: rgba(233,69,96,0.5);
+        color: #fda4af;
+    }
+
+    /* ── No results ── */
+    #no-results-row td { text-align: center; color: #8892b0; padding: 2.5rem; }
+
+    /* ── Pagination ── */
+    .pagination-row {
+        padding: 1rem 1.25rem;
+        border-top: 1px solid #2a3a5c;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .pagination-info { font-size: 0.83rem; color: #8892b0; }
+    .page-btns { display: flex; gap: 4px; }
+    .page-btn {
+        background: #1e2a45;
+        border: 1px solid #2a3a5c;
+        color: #a8b2d8;
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 0.82rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .page-btn:hover, .page-btn.active { border-color: #0f3460; background: #0f3460; color: #fff; }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Empty state ── */
+    .empty-state {
+        text-align: center;
+        padding: 4rem 1rem;
+    }
+    .empty-icon {
+        width: 70px; height: 70px;
+        background: rgba(233,69,96,0.1);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.8rem;
+        color: #e94560;
+        margin: 0 auto 1.25rem;
+    }
+    .empty-state h5 { color: #fff; font-weight: 600; margin-bottom: 0.4rem; }
+    .empty-state p  { color: #8892b0; font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+    /* ── Confirm modal ── */
+    .modal-content {
+        background: #1e2a45;
+        border: 1px solid #2a3a5c;
+        color: #cdd6f4;
+    }
+    .modal-header {
+        border-bottom: 1px solid #2a3a5c;
+        color: #fff;
+    }
+    .modal-footer { border-top: 1px solid #2a3a5c; }
+    .modal-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; }
+    .btn-close { filter: invert(1) brightness(0.7); }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-wrapper">
-    <div class="page-header">
-        <div class="page-title-block">
-            <h1 class="page-title">🕐 Scan History</h1>
-            <p class="page-subtitle">All your previous security assessments</p>
+
+<!-- ── Confirm Clear Modal ── -->
+<div class="modal fade" id="clearModal" tabindex="-1" aria-labelledby="clearModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="clearModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2" style="color:#e94560;"></i>Clear All History?
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="color:#8892b0; font-size:0.93rem;">
+                This will permanently delete <strong style="color:#fda4af;">all {{ scans|length }} scan records</strong>.
+                This action cannot be undone.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirmClear" class="btn btn-danger">
+                    <i class="fas fa-trash me-1"></i>Delete All
+                </button>
+            </div>
         </div>
     </div>
+</div>
+
+<!-- ── Hero ── -->
+<div class="history-hero">
+    <div class="container">
+        <h1 class="page-title">
+            <i class="fas fa-history me-2" style="color:#e94560;"></i>Scan History
+        </h1>
+        <p class="page-sub">All previous vulnerability scans, sorted newest first.</p>
+
+        {% if scans %}
+        <div class="stats-row">
+            <div class="stat-chip">
+                <span class="num">{{ scans | length }}</span>
+                <span class="lbl">Total Scans</span>
+            </div>
+            <div class="stat-chip">
+                <span class="num" style="color:#fda4af;">
+                    {{ scans | selectattr('risk_level', 'equalto', 'HIGH') | list | length }}
+                </span>
+                <span class="lbl">High Risk</span>
+            </div>
+            <div class="stat-chip">
+                <span class="num" style="color:#fcd34d;">
+                    {{ scans | selectattr('risk_level', 'equalto', 'MEDIUM') | list | length }}
+                </span>
+                <span class="lbl">Medium Risk</span>
+            </div>
+            <div class="stat-chip">
+                <span class="num" style="color:#86efac;">
+                    {{ scans | selectattr('risk_level', 'equalto', 'LOW') | list | length }}
+                </span>
+                <span class="lbl">Low Risk</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ── Content ── -->
+<div class="container py-4">
 
     {% if scans %}
-    <div class="scan-list">
-        {% for scan in scans %}
-        <div class="scan-item-wrapper">
-            <a href="/results/{{ scan['id'] }}" class="scan-item">
-                <div class="scan-item-left">
-                    <div class="scan-url">{{ scan['url'] }}</div>
-                    <div class="scan-meta">
-                        {{ scan['created_at'] }}
-                        {% if scan['status'] == 'completed' %}
-                        &nbsp;·&nbsp; {{ scan['total_vulns'] }} vulnerabilities &nbsp;·&nbsp; {{ scan['scan_duration'] }}s
-                        {% endif %}
-                    </div>
+    <div class="history-card" id="historyCard">
+
+        <!-- Card header -->
+        <div class="history-card-header">
+            <div class="history-card-title">
+                <i class="fas fa-table" style="color:#8892b0;"></i>
+                Recent Scans
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="search-box">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" id="searchInput" placeholder="Filter by URL…" autocomplete="off">
                 </div>
-                <div class="scan-item-right">
-                    {% if scan['status'] == 'completed' %}
-                        <span class="badge badge-{{ scan['risk_level'] or 'low' }}">{{ (scan['risk_level'] or 'N/A') | upper }}</span>
-                        <span class="scan-score">{{ scan['risk_score'] | int }}/100</span>
-                    {% elif scan['status'] == 'scanning' %}
-                        <span class="badge badge-info">SCANNING…</span>
-                    {% else %}
-                        <span class="badge badge-failed">FAILED</span>
-                    {% endif %}
-                    <span class="scan-arrow">→</span>
-                </div>
-            </a>
-            <button class="delete-btn" onclick="deleteScan({{ scan['id'] }}, this)" title="Delete">🗑</button>
+                <button class="btn-clear-all" data-bs-toggle="modal" data-bs-target="#clearModal">
+                    <i class="fas fa-trash-alt"></i>Clear All
+                </button>
+            </div>
         </div>
-        {% endfor %}
+
+        <!-- Table -->
+        <div class="table-responsive">
+            <table class="table history-table mb-0" id="historyTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Target URL</th>
+                        <th>Timestamp</th>
+                        <th>Score</th>
+                        <th>Risk Level</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    {% for scan in scans %}
+                    <tr class="scan-row" id="row-{{ scan.id }}" data-url="{{ scan.url | lower }}">
+                        <td>
+                            <span class="scan-id-badge">#{{ scan.id }}</span>
+                        </td>
+                        <td>
+                            <div class="url-cell" title="{{ scan.url }}">
+                                <i class="fas fa-globe me-1" style="color:#4a5a7c; font-size:0.78rem;"></i>
+                                <a href="/scan/{{ scan.id }}">{{ scan.url }}</a>
+                            </div>
+                        </td>
+                        <td class="timestamp-cell">
+                            <i class="fas fa-clock me-1" style="color:#4a5a7c;"></i>{{ scan.timestamp | default('Unknown') }}
+                        </td>
+                        <td class="score-cell score-{{ scan.risk_level }}">{{ scan.risk_score }}</td>
+                        <td>
+                            <span class="risk-pill risk-{{ scan.risk_level }}">
+                                {% if scan.risk_level == 'HIGH' %}
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                {% elif scan.risk_level == 'MEDIUM' %}
+                                    <i class="fas fa-exclamation-circle"></i>
+                                {% else %}
+                                    <i class="fas fa-check-circle"></i>
+                                {% endif %}
+                                {{ scan.risk_level }}
+                            </span>
+                        </td>
+                        <td class="actions-cell">
+                            <a href="/scan/{{ scan.id }}" class="btn-view">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                            <button class="btn-delete-row" data-id="{{ scan.id }}" title="Delete this scan">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    <tr id="no-results-row" style="display:none;">
+                        <td colspan="6">
+                            <i class="fas fa-search me-2"></i>No scans match your filter.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination-row">
+            <div class="pagination-info" id="paginationInfo"></div>
+            <div class="page-btns" id="paginationBtns"></div>
+        </div>
+
     </div>
+
+    <!-- CTA -->
+    <div class="d-flex justify-content-center mt-4">
+        <a href="/" class="btn btn-danger px-4">
+            <i class="fas fa-search me-2"></i>Run a New Scan
+        </a>
+    </div>
+
     {% else %}
+    <!-- Empty state -->
     <div class="empty-state">
-        <div class="empty-icon">🛡️</div>
-        <p class="empty-text">No scans yet. <a href="/" class="link">Start your first scan →</a></p>
+        <div class="empty-icon"><i class="fas fa-folder-open"></i></div>
+        <h5>No Scans Yet</h5>
+        <p>You haven't run any scans. Start your first scan to see results here.</p>
+        <a href="/" class="btn btn-danger px-4">
+            <i class="fas fa-search me-2"></i>Start Your First Scan
+        </a>
     </div>
     {% endif %}
+
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block extra_scripts %}
 <script>
-async function deleteScan(id, btn) {
-    if (!confirm('Delete this scan?')) return;
-    const res = await fetch('/delete/' + id, { method: 'POST' });
-    if (res.ok) btn.closest('.scan-item-wrapper').remove();
-}
+(function () {
+    const ROWS_PER_PAGE = 20;
+    let allRows = Array.from(document.querySelectorAll('.scan-row'));
+    const noResultsRow   = document.getElementById('no-results-row');
+    const paginationInfo = document.getElementById('paginationInfo');
+    const paginationBtns = document.getElementById('paginationBtns');
+    const searchInput    = document.getElementById('searchInput');
+    let currentPage  = 1;
+    let filteredRows = allRows.slice();
+
+    /* ── Pagination render ── */
+    function renderPage() {
+        const start = (currentPage - 1) * ROWS_PER_PAGE;
+        const end   = start + ROWS_PER_PAGE;
+
+        allRows.forEach(r => r.style.display = 'none');
+        filteredRows.slice(start, end).forEach(r => r.style.display = '');
+
+        noResultsRow.style.display = filteredRows.length === 0 ? '' : 'none';
+
+        if (filteredRows.length > 0) {
+            paginationInfo.textContent =
+                `Showing ${start + 1}–${Math.min(end, filteredRows.length)} of ${filteredRows.length} scans`;
+        } else {
+            paginationInfo.textContent = '';
+        }
+
+        const totalPages = Math.ceil(filteredRows.length / ROWS_PER_PAGE);
+        paginationBtns.innerHTML = '';
+        if (totalPages <= 1) return;
+
+        function makeBtn(label, onClick, disabled, active) {
+            const b = document.createElement('button');
+            b.className = 'page-btn' + (active ? ' active' : '');
+            b.textContent = label;
+            b.disabled = !!disabled;
+            b.onclick = onClick;
+            return b;
+        }
+
+        paginationBtns.appendChild(makeBtn('← Prev', () => { currentPage--; renderPage(); }, currentPage === 1));
+        for (let i = 1; i <= totalPages; i++) {
+            paginationBtns.appendChild(makeBtn(i, (function(p){ return () => { currentPage = p; renderPage(); }; })(i), false, i === currentPage));
+        }
+        paginationBtns.appendChild(makeBtn('Next →', () => { currentPage++; renderPage(); }, currentPage === totalPages));
+    }
+
+    /* ── Search filter ── */
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.toLowerCase();
+            filteredRows = allRows.filter(r => r.dataset.url.includes(q));
+            currentPage = 1;
+            renderPage();
+        });
+    }
+
+    /* ── Delete single row ── */
+    document.querySelectorAll('.btn-delete-row').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id  = btn.dataset.id;
+            const row = document.getElementById(`row-${id}`);
+            if (!confirm(`Delete scan #${id}?`)) return;
+
+            row.classList.add('row-deleting');
+            try {
+                const res = await fetch(`/scan/${id}/delete`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    // Remove from DOM + arrays
+                    row.remove();
+                    allRows      = allRows.filter(r => r.id !== `row-${id}`);
+                    filteredRows = filteredRows.filter(r => r.id !== `row-${id}`);
+                    renderPage();
+                    // If table is now empty, reload to show empty state
+                    if (allRows.length === 0) location.reload();
+                } else {
+                    row.classList.remove('row-deleting');
+                    alert('Failed to delete scan.');
+                }
+            } catch (e) {
+                row.classList.remove('row-deleting');
+                alert('Error: ' + e.message);
+            }
+        });
+    });
+
+    /* ── Clear all ── */
+    const confirmClearBtn = document.getElementById('confirmClear');
+    if (confirmClearBtn) {
+        confirmClearBtn.addEventListener('click', async () => {
+            confirmClearBtn.disabled = true;
+            confirmClearBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deleting…';
+            try {
+                const res  = await fetch('/history/clear', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Failed to clear history.');
+                    confirmClearBtn.disabled = false;
+                    confirmClearBtn.innerHTML = '<i class="fas fa-trash me-1"></i>Delete All';
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+                confirmClearBtn.disabled = false;
+                confirmClearBtn.innerHTML = '<i class="fas fa-trash me-1"></i>Delete All';
+            }
+        });
+    }
+
+    renderPage();
+})();
 </script>
 {% endblock %}
